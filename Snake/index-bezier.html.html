@@ -1,0 +1,471 @@
+<html>
+<head>
+    <title>SNAKE THREE JS!!!</title>
+    <script type="text/javascript" src="jquery/jquery1.11.2.min.js"></script>
+    <script type="text/javascript" src="js/THREEx.WindowResize.js"></script>
+    <script type="text/javascript" src="js/THREEx.KeyboardState.js"></script>
+    <script src="three/three.min.js"></script>
+    <style>
+        body
+        {
+            margin: 0;
+            background-color: #fff;
+        }
+        canvas
+        {
+            width: 100%;
+            height: 100%;
+        }
+        .control
+        {
+            display: table;
+            font-family: Arial;
+            font-size: 20px;
+            position: absolute;
+            z-index: 9;
+            color: #fff;
+            top: 5%;
+            left: 5%;
+        }
+        .control #score
+        {
+            font-size: 26px;
+            font-weight: bold;
+            padding: 5px 0 0 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="control">
+        arrows to move;</br> click to change camera position;
+        <div id="score">
+            0
+        </div>
+    </div>
+    <script>
+        var debug = 0;
+        var v = 0;
+        /*move object*/
+        var tempo;
+        var distancia;
+        var recorrido;
+        var teclado = new THREEx.KeyboardState();
+        var left = false;
+        var right = false;
+        var up = false;
+        var bottom = false;
+        var lastFrameTime = 0;
+        var lastFrameTimeKeys = 0;
+        var lastX = 0;
+        var lastZ = 0;
+        var resetCalled = false;
+        var start = false;
+        var movedX = 0;
+        var movedZ = 0;
+        var keysPressed = [null];
+        var keyFirst;
+        /*move object*/
+        var size = 0.3;
+
+        var cube = [];
+        var planeSize = [];
+        var qtdCube = 0;
+        var effects = [];
+
+        var ball = 0;
+
+        var plano;
+
+
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 3;
+        camera.position.y = 1.52;
+        camera.lookAt(scene.position);
+
+        var renderer = new THREE.WebGLRenderer({ alpha: true });
+        renderer.setClearColor(0x000000, 1);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        THREEx.WindowResize(renderer, camera);
+
+        Axis = new THREE.AxisHelper(100, 100, 100);
+        scene.add(Axis);
+
+
+        /*start here*/
+
+        function carregaCubo() {
+            var x = 0.15;
+            for (v = 0; v < 5; v++) {
+                var geometry = new THREE.BoxGeometry(x, x, x);
+                var material;
+                if (qtdCube == 0) {
+                    material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                } else {
+                    material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+                }
+                cube[qtdCube] = new THREE.Mesh(geometry, material);
+                cube[qtdCube].position.set((x / 2) + (qtdCube * x), x / 2, x / 2);
+                scene.add(cube[qtdCube]);
+                qtdCube++;
+            }
+        }
+        carregaCubo();
+        function aumentaCubo() {
+            var x = 0.15;
+            var lastZ;
+            var lastX;
+            var geometry = new THREE.BoxGeometry(x, x, x);
+            var material;
+            material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+            cube[qtdCube] = new THREE.Mesh(geometry, material);
+            lastZ = cube[qtdCube - 1].position.z;
+            lastX = cube[qtdCube - 1].position.x;
+            cube[qtdCube].position.set(lastX, x / 2, lastZ);
+            scene.add(cube[qtdCube]);
+            qtdCube++;
+            document.getElementById("score").innerHTML = qtdCube - 5;
+        }
+
+        function resetCubo() {
+            alert(qtdCube - 5);
+            for (v = 0; v < qtdCube; v++) scene.remove(cube[v]);
+            qtdCube = 0;
+            location.reload();
+        }
+
+        function carregaBall() {
+            var x = 0.15
+            var r = 0.075
+            var geometry = new THREE.SphereGeometry(r, r, 20);
+            //criando material do objeto, definindo exibição de wireframe
+            var material = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+            ball = new THREE.Mesh(geometry, material);
+            ball.position.set((x / 2) + (qtdCube * x), x / 2, x / 2);
+            scene.add(ball);
+        }
+        effects.push(function (delta, now) {
+            if (ball == null) return;
+            ball.rotation.y += 0.05;
+        })
+        carregaBall();
+
+        function resetBall() {
+            var x = 0.15;
+
+            var mX = Math.floor((Math.random() * 10));
+            var mZ = Math.floor((Math.random() * 10));
+            var r1 = x / 2;
+            var r2 = x / 2;
+            var r3 = Math.floor((Math.random() * 2) + 1);
+            var r4 = Math.floor((Math.random() * 2) + 1);
+            //digamos que r1 esta na origem e ele vai andar x * mX (qtd de veses pro lado)
+            r1 = r1 + (x * mX);
+            r2 = r2 + (x * mZ);
+
+            if (r3 == 2) {//negativo X					
+                r1 = (r1) * (-1);
+            }
+            if (r4 == 2) {//negativo Z
+                r2 = (r2) * (-1);
+            }
+
+            ball.position.set(r1, x / 2, r2)
+        }
+
+        function carregaPlano() {
+            //Geometría del plano
+            var x = size * 10;
+            var geometry = new THREE.PlaneGeometry(x, x, x, x);
+            //Textura
+            var meshPlano = new THREE.ImageUtils.loadTexture("texturas/muro-border.jpg");
+            meshPlano.wrapS = meshPlano.wrapT = THREE.RepeatWrapping;
+            meshPlano.repeat.set(20, 20);
+            // Material y agregado la textura
+            var materialPlano = new THREE.MeshBasicMaterial({ map: meshPlano, side: THREE.DoubleSide });
+            // El plano (Territorio)
+            plano = new THREE.Mesh(geometry, materialPlano);
+            plano.rotation.x = Math.PI / 2;
+
+            scene.add(plano);
+        }
+        carregaPlano();
+
+
+        /*var mouse	= {x : 0, y : 0}
+        document.addEventListener('mousemove', function(event){
+        mouse.x	= (event.clientX / window.innerWidth ) - 0.5
+        mouse.y	= (event.clientY / window.innerHeight) - 0.5
+        }, false)
+        effects.push(function(delta, now){
+        camera.position.x += ((mouse.x*5 - camera.position.x) * (delta*3)) / 10;
+        //camera.position.y += (mouse.y*5 - camera.position.y) * (delta*3)
+        //alert(camera.position.y);
+        camera.lookAt( scene.position )
+        })*/
+
+
+        effects.push(function (delta, now) {
+            //o metodo pode ser chamado antes de ser criado os objetos
+            if (ball === null || cube == null) return
+            var distance = ball.position.distanceTo(cube[0].position)
+            var distanceTwo = ball.position.distanceTo(cube[1].position)//como coloquei o processamento rapido da keys tive que verificar o segundo, cubo tbm pq se naum ele tava passando direto	
+            if (distance < 0.12 || distanceTwo < 0.12) {
+                resetBall();
+                aumentaCubo();
+            }
+        })
+        effects.push(function (delta, now) {
+            if (cube == null) return
+            if (resetCalled == false) {
+                var r1 = 1.5;
+                if (cube[0].position.x > r1 || cube[0].position.x < -r1 || cube[0].position.z > r1 || cube[0].position.z < -r1) {
+                    resetCalled = true;
+                    resetCubo();
+                }
+                for (v = 1; v < qtdCube; v++) {
+                    var distance = cube[v].position.distanceTo(cube[0].position)
+                    var distanceTwo = cube[1].position.distanceTo(cube[0].position)	 //como coloquei o processamento rapido da keys tive que verificar o segundo, cubo tbm pq se naum ele tava passando direto
+                    if (distance <= 0.1 || distanceTwo <= 0.1) {
+                        resetCalled = true;
+                        resetCubo();
+                    }
+                }
+                if (qtdCube == 400) {
+                    resetCalled = true;
+                    resetCubo();
+                    alert("LOL - YOU WON!")
+                }
+            }
+        })
+        effects.push(function (delta, now) {
+            if (cube == null) return
+            var timeToMove = 100;
+            var timeKeys = Date.now(); //veficiar se aperto 2 tecla muito rapido
+            frametimeKeys = timeKeys - lastFrameTimeKeys; //veficiar se aperto 2 tecla muito rapido
+            if (teclado.pressed("up") && bottom == false) {
+                if (frametimeKeys >= timeToMove) {//veficiar se aperto 2 tecla muito rapido
+                    left = false;
+                    right = false;
+                    up = true;
+                    bottom = false;
+                    start = true;
+                    keyFirst = "up"; //veficiar se aperto 2 tecla muito rapido
+                    lastFrameTimeKeys = Date.now(); //veficiar se aperto 2 tecla muito rapido
+                } else if (keysPressed[0] == null && keyFirst != "up") {//veficiar se aperto 2 tecla muito rapido
+                    keysPressed[0] = "up"; //veficiar se aperto 2 tecla muito rapido
+                }
+            }
+            else if (teclado.pressed("down") && up == false) {
+                if (frametimeKeys >= timeToMove) {
+                    left = false;
+                    right = false;
+                    up = false;
+                    bottom = true;
+                    start = true;
+                    keyFirst = "down"
+                    lastFrameTimeKeys = Date.now();
+                } else if (keysPressed[0] == null && keyFirst != "down") {
+                    keysPressed[0] = "down";
+                }
+            }
+            else if (teclado.pressed("left") && right == false) {
+                if (frametimeKeys >= timeToMove) {
+                    left = true;
+                    right = false;
+                    up = false;
+                    bottom = false;
+                    start = true;
+                    keyFirst = "left"
+                    lastFrameTimeKeys = Date.now();
+                } else if (keysPressed[0] == null && keyFirst != "left") {
+                    keysPressed[0] = "left";
+                }
+            }
+            else if (teclado.pressed("right") && left == false && start == true) {
+                if (frametimeKeys >= timeToMove) {
+                    left = false;
+                    right = true;
+                    up = false;
+                    bottom = false;
+                    keyFirst = "right"
+                    lastFrameTimeKeys = Date.now();
+                } else if (keysPressed[0] == null && keyFirst != "right") {
+                    keysPressed[0] = "right";
+                }
+            }
+            var time = Date.now();
+            var frameTime = time - lastFrameTime;
+
+            if (frameTime >= timeToMove) {
+                move();
+                if (keysPressed[0] != null) {//veficiar se aperto 2 tecla muito rapido
+                    if (keysPressed[0] == "up") {
+                        left = false;
+                        right = false;
+                        up = true;
+                        bottom = false;
+                    }
+                    else if (keysPressed[0] == "down") {
+                        left = false;
+                        right = false;
+                        up = false;
+                        bottom = true;
+                    }
+                    else if (keysPressed[0] == "left") {
+                        left = true;
+                        right = false;
+                        up = false;
+                        bottom = false;
+                    }
+                    else if (keysPressed[0] == "right") {
+                        left = false;
+                        right = true;
+                        up = false;
+                        bottom = false;
+                    }
+                    //console.log(keysPressed[0]);
+                    keysPressed[0] = null;
+                    move();
+                } //veficiar se aperto 2 tecla muito rapido
+                lastFrameTime = time;
+            }
+        })
+
+
+        function move() {
+            recorrido = 0.15;
+            obj_mov = cube;
+            lastZ = obj_mov[0].position.z;
+            lastX = obj_mov[0].position.x;
+
+            if (up == true) {
+                obj_mov[0].position.z -= recorrido;
+                moveSub(lastX, lastZ);
+                moved = true;
+            }
+            if (bottom == true) {
+                obj_mov[0].position.z += recorrido;
+                moveSub(lastX, lastZ);
+                moved = true;
+            }
+            if (left == true) {
+                obj_mov[0].position.x -= recorrido;
+                moveSub(lastX, lastZ);
+                moved = true;
+            }
+            if (right == true) {
+                obj_mov[0].position.x += recorrido;
+                moveSub(lastX, lastZ);
+                moved = true;
+            }
+        }
+
+        function moveSub() {
+            var lastZZ;
+            var lastXX;
+            for (v = 1; v < qtdCube; v++) {
+                lastZZ = obj_mov[v].position.z;
+                lastXX = obj_mov[v].position.x;
+
+                obj_mov[v].position.z = lastZ;
+                obj_mov[v].position.x = lastX;
+
+                lastZ = lastZZ;
+                lastX = lastXX;
+            }
+        }
+        /*CUBIC BEZIER*/
+        //*COPIA DAKI A ATE ALI*/
+        //COLOCA DEPOIS DA FUNÇÃO moveSub() flws vou joga
+        var points = 500;
+        var alongBezier = points - 1;
+        var alongBezierTwo = points - 1;
+        var geometryCubicBezier = new THREE.Geometry();
+        var geometryCubicBezierTwo = new THREE.Geometry();
+        var c = 0;
+        var curve = new THREE.CubicBezierCurve3(new THREE.Vector3(-1.5, 0, 1.5), new THREE.Vector3(0, 0, -5.5), new THREE.Vector3(0, 0, 5.5), new THREE.Vector3(1.5, 0, -1.5));
+        var curveTwo = new THREE.CubicBezierCurve3(new THREE.Vector3(-1.5, 0, -1.5), new THREE.Vector3(0, 0, 5.5), new THREE.Vector3(0, 0, -5.5), new THREE.Vector3(1.5, 0, 1.5));
+        for (c = 0; c < points; c++) {
+            geometryCubicBezier.vertices.push(curve.getPoint(c / points))
+            geometryCubicBezierTwo.vertices.push(curveTwo.getPoint(c / points))
+        }
+        //show bezier line
+
+        var materialCubicBezier = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1 });
+
+        var lineCubicBezier = new THREE.Line(geometryCubicBezier, materialCubicBezier);
+        scene.add(lineCubicBezier);
+        var lineCubicBezierTwo = new THREE.Line(geometryCubicBezierTwo, materialCubicBezier);
+        scene.add(lineCubicBezierTwo);
+
+        var ballBonus = null;
+        function carregaBallBonus() {
+            var x = 0.15
+            var r = 0.075
+            var geometry = new THREE.SphereGeometry(r, r, 30);
+            //criando material do objeto, definindo exibição de wireframe
+            var material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: false });
+            ballBonus = new THREE.Mesh(geometry, material);
+            ballBonus.position.set(-3, x / 2, 0);
+            scene.add(ballBonus);
+        }
+        effects.push(function (delta, now) {
+            if (ballBonus == null) return;
+            // move through the bezier's curve                        
+            var distance = ballBonus.position.distanceTo(cube[0].position);
+            if (distance < 0.12) {
+                resetCalled = true;
+                resetCubo();
+            }
+
+            if (alongBezier > 0) {
+                    ballBonus.position.x = geometryCubicBezier.vertices[alongBezier].x;
+                    ballBonus.position.z = geometryCubicBezier.vertices[alongBezier].z;
+                    alongBezier--;
+                    if(alongBezier == 0) alongBezierTwo = points - 1;
+            } else if(alongBezierTwo > 0)  {
+                    ballBonus.position.x = geometryCubicBezierTwo.vertices[alongBezierTwo].x;
+                    ballBonus.position.z = geometryCubicBezierTwo.vertices[alongBezierTwo].z;
+                    alongBezierTwo--;
+                    if(alongBezierTwo == 0) alongBezier = points - 1;
+            }
+        })
+        carregaBallBonus();
+        //*COPIA DELA A ATE AKI*/
+
+        effects.push(function () {
+            if (renderer == null) return;
+            renderer.render(scene, camera);
+        })
+        var lastTimeMsec = null;
+        requestAnimationFrame(function animate(nowMsec) {
+            // keep looping
+            requestAnimationFrame(animate);
+            // measure time
+            lastTimeMsec = lastTimeMsec || nowMsec - 1000 / 60
+            var deltaMsec = Math.min(200, nowMsec - lastTimeMsec)
+            lastTimeMsec = nowMsec
+            // call each update function
+            effects.forEach(function (onRenderFct) {
+                onRenderFct(deltaMsec / 1000, nowMsec / 1000)
+            })
+        })
+        $(document).ready(function (e) {
+            $("body").click(function () {
+                if (camera.position.z == 3) {
+                    camera.position.z = 1;
+                    camera.position.y = 4.2;
+                    camera.lookAt(scene.position)
+                } else {
+                    camera.position.z = 3;
+                    camera.position.y = 1.52;
+                    camera.lookAt(scene.position);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
